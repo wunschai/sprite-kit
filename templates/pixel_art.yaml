@@ -1,0 +1,14 @@
+extends: base
+style:
+  name: "pixel_art"
+  prompt_prefix: "Create a 2D pixel art sprite sheet"
+  style_keywords:
+    - "16-bit SNES-style pixel art"
+    - "limited 32-color palette"
+    - "clean blocky pixel style with sharp edges"
+    - "retro JRPG aesthetic"
+  size_recommendation: "1536x1024"
+  quality_recommendation: "medium"
+  post_process:
+    resize_method: "nearest"
+    target_scale: 0.5

@@ -1,0 +1,14 @@
+extends: base
+style:
+  name: "retro_futurism"
+  prompt_prefix: "Create a 2D retro-futuristic sprite sheet"
+  style_keywords:
+    - "1980s retrofuturism aesthetic"
+    - "chrome armor with neon accents"
+    - "CRT scanline visual style"
+    - "color palette inspired by Tron and Blade Runner"
+    - "deep navy, electric cyan, hot magenta, chrome silver"
+  size_recommendation: "1536x1024"
+  quality_recommendation: "medium"
+  post_process:
+    resize_method: "lanczos"

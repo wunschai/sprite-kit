@@ -1,0 +1,15 @@
+extends: base
+style:
+  name: "tech_futurism"
+  prompt_prefix: "Create a 2D sci-fi tech style sprite sheet"
+  style_keywords:
+    - "holographic particle effects"
+    - "electric arcs and glowing energy"
+    - "futuristic HUD-style visual elements"
+    - "electric blue core, white-hot center, purple edge glow"
+    - "clean edges suitable for game engine integration"
+  size_recommendation: "1536x1024"
+  quality_recommendation: "medium"
+  post_process:
+    resize_method: "lanczos"
+    chroma_fuzz: 20
