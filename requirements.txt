@@ -1,0 +1,5 @@
+openai>=1.30.0
+Pillow>=10.0
+numpy>=1.26
+pyyaml>=6.0
+python-dotenv>=1.0
