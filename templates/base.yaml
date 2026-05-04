@@ -1,0 +1,15 @@
+# base.yaml - all templates inherit this structure
+version: 1
+base:
+  background: "Solid #FF00FF magenta background."
+  consistency: "Consistent character proportions and pixel scale across all frames."
+  margin: "Each frame must fit fully inside its cell with clear margin on all sides."
+  separation: "No overlap between frames. Clear visual separation."
+
+# Default template variables (overridden by CLI / generate_sprite kwargs).
+variables:
+  subject: ""
+  action: ""
+  frame_count: 3
+  layout: "1x3"
+  view: "side-view"

@@ -1,0 +1,32 @@
+# custom.yaml.example
+#
+# Copy this file to ``templates/<your_style>.yaml`` and edit the fields below.
+# Then call sprite-kit with ``--template <your_style>`` to use it.
+#
+# The ``extends: base`` line pulls in the standard chroma-key background,
+# frame-consistency, margin and separation directives so your prompt always
+# produces sheets compatible with the post-processing pipeline.
+extends: base
+
+style:
+  # Identifier returned by ``load_template()`` and shown in metadata.
+  name: "my_style"
+
+  # Sentence that opens the assembled prompt — describe the medium and goal.
+  prompt_prefix: "Create a 2D illustration sprite sheet"
+
+  # Style hints joined into the prompt verbatim. Add as many as you like.
+  style_keywords:
+    - "soft watercolor textures"
+    - "warm pastel palette"
+    - "hand-drawn outlines"
+
+  # Recommended OpenAI image size and quality. CLI flags override these.
+  size_recommendation: "1024x1024"
+  quality_recommendation: "medium"
+
+  # Per-template post-processing tweaks. Optional fields:
+  #   resize_method: "nearest" (pixel art) | "lanczos" (smooth)
+  #   chroma_fuzz:   integer 0–50 — raise it for glow/edge bleed.
+  post_process:
+    resize_method: "lanczos"
