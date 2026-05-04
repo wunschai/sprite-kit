@@ -1,0 +1,146 @@
+# Tasks: 01-mvp-core
+
+> Sprint：Sprite Kit 核心 MVP（Phase 1）
+> 對應規格：`docs/01-mvp-core/spec.md`
+> 拆解原則：TDD（Red → Green）、平行可派發、每個 milestone 可獨立交付驗證
+
+---
+
+## Milestone 1: 專案骨架與設定基礎（序列）
+
+> **預期結果**：repo 可 `uv pip install -e .` 安裝；`pytest` 能執行；lint/format 命令可用；`config.load_config()` 能依優先順序載入設定。
+> **驗證方式**：`uv run pytest tests/test_config.py -v` 全過 + `ruff check .` 無錯誤
+> **涵蓋 AC**：AC-7（設定優先順序），鋪路給後續 milestone
+
+- [ ] **Task 1.1**：定下 ADR-3（輸出檔衝突）與 ADR-4（lint / format / package manager）— 更新 `spec.md` 與 `works.md` 記錄決策
+- [ ] **Task 1.2**：建立 `pyproject.toml`（依 ADR-4 結果使用 uv + ruff）+ `requirements.txt` 後備 + `setup.py`（pip install 相容）
+- [ ] **Task 1.3**：建立 `sprite_kit/` 套件骨架（空模組檔 + `__init__.py` 註冊公開 API）+ `tests/` 目錄結構 + `tests/__init__.py`
+- [ ] **Task 1.4**：建立 `.env.example`（列出 spec 第 6.1 節環境變數）+ 補強 `.gitignore`（venv、`*.egg-info`、output、cache）
+- [ ] **Task 1.5**：撰寫 `tests/test_config.py`（CLI 參數 > env > .env > default 優先順序、缺 `OPENAI_API_KEY` 錯誤訊息）(Red)
+- [ ] **Task 1.6**：實作 `sprite_kit/config.py` 通過 Task 1.5 測試 (Green)
+
+---
+
+## Milestone 2: 核心模組（平行 A / B / C）
+
+> **預期結果**：process、export、generate 三個模組獨立可用、各自有測試覆蓋；4 個 prompt 模板載入無誤。
+> **介面契約**：已在 `spec.md` 第 5.2、6.1–6.3、7 節定義，平行工作線可獨立開發不衝突。
+> **涵蓋 AC**：AC-2、AC-3、AC-4、AC-5、AC-6（部分）
+
+### 🔀 可平行工作線
+
+**[A] process.py — 後處理管線** — `isolation: worktree`
+
+> **範圍**：`sprite_kit/process.py`、`tests/test_process.py`、`tests/fixtures/sample_sheet.png`
+> **依賴**：M1 完成（package 骨架、Pillow / numpy 已安裝）
+> **介面契約**：`spec.md` 第 6.2 節 — 6 個函式 `chroma_key_remove(img, chroma, fuzz) -> RGBA`、`despill(img) -> RGBA`、`split_frames(img, rows, cols) -> list[RGBA]`、`align_frames(frames, anchor) -> list[RGBA]`、`resize(img, scale, size, method) -> RGBA`、`qc_check(frames) -> dict`
+> **驗證方式**：`uv run pytest tests/test_process.py -v` 全過
+> **涵蓋 AC**：AC-2、AC-3
+
+- [ ] **Task 2.A.1**：製作 `tests/fixtures/sample_sheet.png`（1×3 grid、#FF00FF 背景、簡單形狀，可重現）
+- [ ] **Task 2.A.2**：撰寫 `chroma_key_remove` + `despill` 測試（背景消除、邊緣 alpha、despill 後無洋紅暈）(Red)
+- [ ] **Task 2.A.3**：實作 `chroma_key_remove` + `despill` (Green)
+- [ ] **Task 2.A.4**：撰寫 `split_frames` + `align_frames` 測試（rows×cols 切割、anchor 對齊、AC-3 腳底 y 一致誤差 ≤ 1px）(Red)
+- [ ] **Task 2.A.5**：實作 `split_frames` + `align_frames` (Green)
+- [ ] **Task 2.A.6**：撰寫 `resize` + `qc_check` 測試（nearest vs lanczos、空白幀偵測、尺寸一致性）(Red)
+- [ ] **Task 2.A.7**：實作 `resize` + `qc_check` (Green)
+
+**[B] export.py — 匯出管線** — `isolation: worktree`
+
+> **範圍**：`sprite_kit/export.py`、`tests/test_export.py`
+> **依賴**：M1 完成（package 骨架、Pillow 已安裝）
+> **介面契約**：`spec.md` 第 6.3 節 — 5 個函式 `export_frames(frames, output_dir)`、`export_sheet(frames, columns, output)`、`export_gif(frames, output, fps)`、`export_atlas(frames, name, output)`、`export_metadata(meta, output)`
+> **驗證方式**：`uv run pytest tests/test_export.py -v` 全過
+> **涵蓋 AC**：AC-4
+
+- [ ] **Task 2.B.1**：撰寫 `export_frames` + `export_sheet` 測試（檔名 `frame_001.png` 序號補零、sheet 透明背景、columns 對齊）(Red)
+- [ ] **Task 2.B.2**：實作 `export_frames` + `export_sheet` (Green)
+- [ ] **Task 2.B.3**：撰寫 `export_gif` 測試（透明背景、FPS 與參數一致、可被 PIL 重新讀取驗證幀數）(Red)
+- [ ] **Task 2.B.4**：實作 `export_gif` (Green)
+- [ ] **Task 2.B.5**：撰寫 `export_atlas` + `export_metadata` 測試（JSON schema 符合 spec 第 6.3 節範例、可被 `json.loads` 解析）(Red)
+- [ ] **Task 2.B.6**：實作 `export_atlas` + `export_metadata` (Green)
+
+**[C] generate.py + templates — 生成與 prompt 模板** — `isolation: worktree`
+
+> **範圍**：`sprite_kit/generate.py`、`tests/test_generate.py`、`templates/base.yaml`、`templates/pixel_art.yaml`、`templates/brutalism.yaml`、`templates/retro_futurism.yaml`、`templates/tech_futurism.yaml`、`templates/custom.yaml.example`
+> **依賴**：M1 完成（config.py 可讀 `OPENAI_API_KEY`）
+> **介面契約**：`spec.md` 第 6.1、7 節 — `generate_sprite(prompt, template, frames, layout, size, quality) -> (raw_png_bytes, used_prompt, metadata_dict)`；模板透過 `extends: base` 繼承基礎結構
+> **驗證方式**：`uv run pytest tests/test_generate.py -v` 全過（OpenAI client 用 `unittest.mock`）
+> **涵蓋 AC**：AC-5、AC-7（部分）
+
+- [ ] **Task 2.C.1**：撰寫模板載入器測試（base.yaml 解析、extends 繼承、自訂模板從 `templates/` 載入）(Red)
+- [ ] **Task 2.C.2**：實作模板載入器 + 撰寫 `base.yaml` 與 4 個內建模板 YAML（依 spec 第 7.2 節規格）(Green)
+- [ ] **Task 2.C.3**：撰寫 prompt 組裝測試（自動附加色鍵背景、幀一致性指令、模板 style_keywords 注入）(Red)
+- [ ] **Task 2.C.4**：實作 prompt 組裝邏輯 (Green)
+- [ ] **Task 2.C.5**：撰寫 `generate_sprite` 測試（mock OpenAI client、回傳 tuple 結構、缺 API key 錯誤訊息）(Red)
+- [ ] **Task 2.C.6**：實作 `generate_sprite` (Green)
+
+---
+
+## Milestone 3: CLI 整合與 pipeline（序列、依賴 M2）
+
+> **預期結果**：4 個 CLI 子命令可用；`sprite-kit pipeline` 能從 prompt 串接到匯出；至少一個畫風模板用真實 API 跑通 smoke test。
+> **驗證方式**：`uv run pytest tests/test_cli.py tests/integration/ -v` 全過 + 手動 `sprite-kit pipeline` smoke test
+> **涵蓋 AC**：AC-1、AC-6、AC-8（最終確認）、AC-7（最終確認）
+
+### 🔗 匯合點
+
+- [ ] **Task 3.1**：撰寫 `tests/test_cli.py`（argparse 子命令分派、`--help` 可用、缺必要參數錯誤訊息）(Red)
+- [ ] **Task 3.2**：實作 `sprite_kit/cli.py` — `generate` / `process` / `export` / `pipeline` 4 個子命令分派 (Green)
+- [ ] **Task 3.3**：撰寫 `tests/integration/test_pipeline.py`（mock generate、串接真實 process + export，驗證 fire-mage smoke 案例端到端可跑）(Red)
+- [ ] **Task 3.4**：實作 `pipeline` 串接邏輯 (Green)
+- [ ] **Task 3.5**：補 `sprite_kit/utils.py`（共用工具：檔名序號、輸出目錄處理、log helper）+ 對應測試
+- [ ] **Task 3.6**：撰寫 `README.md`（英文總覽 + 5 種整合方式）+ `README.zh-TW.md`（繁中對照）
+- [ ] **Task 3.7**：標記 `@pytest.mark.integration` 整合測試 — 用真實 `OPENAI_API_KEY` 跑 4 個模板各 1 次，確認 AC-5 全綠（CI 預設不跑，本地用 `pytest -m integration` 觸發）
+- [ ] **Task 3.8**：更新 `tasks.md`（勾選完成項）+ `works.md`（記錄各 milestone 決策與遇到的問題）
+
+---
+
+## Self-Review
+
+### 1. Spec 覆蓋度
+
+| AC | 對應 Task |
+|----|-----------|
+| AC-1 CLI 命令完整 | M3 T3.1 / T3.2 / T3.4 |
+| AC-2 色鍵去背正確性 | M2 [A] T2.A.2 / T2.A.3 |
+| AC-3 幀對齊正確性 | M2 [A] T2.A.4 / T2.A.5 |
+| AC-4 匯出格式正確性 | M2 [B] T2.B.1–T2.B.6 |
+| AC-5 模板可用性 | M2 [C] T2.C.1 / T2.C.2、M3 T3.7 |
+| AC-6 模組化呼叫 | M1 T1.3、M3 T3.2（最終確認） |
+| AC-7 設定優先順序 | M1 T1.5 / T1.6、M3 T3.7（最終確認） |
+| AC-8 測試覆蓋 | 全 milestone Red task + M3 T3.7 |
+
+✅ 8 條 AC 全部對應到至少一個 task。
+
+### 2. Task 完整性檢查
+
+- ✅ 所有 task 具體（含模組名稱、函式名稱、預期行為）
+- ✅ 測試與實作分離（Red / Green 標記）
+- ✅ 每個 milestone 有預期結果 + 驗證方式
+- ✅ 平行工作線都有上下文卡片（範圍、依賴、介面契約、驗證方式）
+
+### 3. 依賴一致性
+
+- ✅ M1 → M2 線性依賴（package 骨架、config）
+- ✅ M2 [A] / [B] / [C] 檔案集合不重疊：
+  - [A] `sprite_kit/process.py`、`tests/test_process.py`、`tests/fixtures/sample_sheet.png`
+  - [B] `sprite_kit/export.py`、`tests/test_export.py`
+  - [C] `sprite_kit/generate.py`、`tests/test_generate.py`、`templates/*.yaml`
+  - 共用點：`sprite_kit/__init__.py`（M1 已預先建立空骨架）
+- ✅ 介面契約全部在 spec.md 已寫死（第 5.2、6.1–6.3、7 節），分線前不需再協調
+- ✅ M3 匯合點有整合測試（T3.3）驗證 process + export 串接
+
+### 4. 風險前置
+
+- ✅ ADR 決策（Task 1.1）放在最前，避免後續返工
+- ✅ M2 [C] generate.py 涉及 OpenAI API（技術風險最高）已平行起跑，不會卡到 [A][B]
+- ✅ Smoke test（T3.7）放在最後，但本身是可選驗證，不會阻擋 MVP 完成
+
+---
+
+## 變更記錄
+
+| 日期 | 變更 | 來源 |
+|------|------|------|
+| 2026-05-04 | 初版 | `/ddd.tasks` 依 spec.md 拆解 |
