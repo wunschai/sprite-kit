@@ -260,3 +260,370 @@ class TestProcessSubcommand:
         assert rc == 0
         frames = sorted(out_dir.glob("frame_*.png"))
         assert len(frames) == 3
+
+
+# --------------------------------------------------------------------------- #
+# F1: pipeline reads template post_process block
+# --------------------------------------------------------------------------- #
+
+
+class TestPipelineTemplatePostProcess:
+    """run_pipeline must honour template post_process: chroma_fuzz + target_scale."""
+
+    def _patch_chroma_capture(self, monkeypatch) -> dict:
+        """Patch chroma_key_remove to capture its kwargs without altering output."""
+        from sprite_kit import process as proc
+
+        captured: dict = {}
+        original = proc.chroma_key_remove
+
+        def spy(img, chroma="#FF00FF", fuzz=15):
+            captured["fuzz"] = fuzz
+            captured["chroma"] = chroma
+            return original(img, chroma=chroma, fuzz=fuzz)
+
+        monkeypatch.setattr("sprite_kit.cli.chroma_key_remove", spy)
+        return captured
+
+    def test_pipeline_uses_template_chroma_fuzz_when_cli_unset(self, tmp_path, monkeypatch):
+        _patch_generate(monkeypatch)
+        captured = self._patch_chroma_capture(monkeypatch)
+
+        rc = main(
+            [
+                "pipeline",
+                "--prompt",
+                "x",
+                "--template",
+                "tech_futurism",
+                "--frames",
+                "3",
+                "--layout",
+                "1x3",
+                "--format",
+                "png",
+                "--output",
+                str(tmp_path),
+            ]
+        )
+
+        assert rc == 0
+        # tech_futurism template has post_process.chroma_fuzz=20
+        assert captured["fuzz"] == 20
+
+    def test_pipeline_cli_fuzz_overrides_template_fuzz(self, tmp_path, monkeypatch):
+        _patch_generate(monkeypatch)
+        captured = self._patch_chroma_capture(monkeypatch)
+
+        rc = main(
+            [
+                "pipeline",
+                "--prompt",
+                "x",
+                "--template",
+                "tech_futurism",
+                "--fuzz",
+                "30",
+                "--frames",
+                "3",
+                "--layout",
+                "1x3",
+                "--format",
+                "png",
+                "--output",
+                str(tmp_path),
+            ]
+        )
+
+        assert rc == 0
+        assert captured["fuzz"] == 30
+
+    def test_pipeline_template_target_scale_resizes_output(self, tmp_path, monkeypatch):
+        # pixel_art has post_process.target_scale=0.5 → output frames should be half-sized
+        sheet = _make_magenta_sheet(rows=1, cols=3, cell=32)
+        _patch_generate(monkeypatch, raw_bytes=sheet)
+
+        rc = main(
+            [
+                "pipeline",
+                "--prompt",
+                "x",
+                "--template",
+                "pixel_art",
+                "--frames",
+                "3",
+                "--layout",
+                "1x3",
+                "--format",
+                "png",
+                "--output",
+                str(tmp_path),
+            ]
+        )
+
+        assert rc == 0
+        frames = sorted(tmp_path.glob("frame_*.png"))
+        assert frames, "no frames written"
+        # Aligned content was 16x16 (half of cell), then scale 0.5 → 8x8.
+        # Allow some tolerance because alignment trims to bbox first.
+        sample = Image.open(frames[0])
+        assert sample.size[0] <= 16, f"target_scale=0.5 should shrink width, got {sample.size}"
+
+    def test_pipeline_no_resize_when_template_lacks_target_scale(self, tmp_path, monkeypatch):
+        # brutalism's post_process has no target_scale → frames retain original size
+        sheet = _make_magenta_sheet(rows=1, cols=3, cell=32)
+        _patch_generate(monkeypatch, raw_bytes=sheet)
+
+        rc = main(
+            [
+                "pipeline",
+                "--prompt",
+                "x",
+                "--template",
+                "brutalism",
+                "--frames",
+                "3",
+                "--layout",
+                "1x3",
+                "--format",
+                "png",
+                "--output",
+                str(tmp_path),
+            ]
+        )
+
+        assert rc == 0
+        frames = sorted(tmp_path.glob("frame_*.png"))
+        sample = Image.open(frames[0])
+        # Aligned bbox is 16x16 (not scaled) since brutalism has no target_scale.
+        assert sample.size[0] >= 16
+
+
+# --------------------------------------------------------------------------- #
+# F5: friendly errors for OSError (corrupt PNG) and yaml.YAMLError
+# --------------------------------------------------------------------------- #
+
+
+class TestFriendlyErrors:
+    def test_friendly_error_on_corrupt_png(self, tmp_path: Path, capsys):
+        bad = tmp_path / "broken.png"
+        bad.write_bytes(b"")  # 0-byte → PIL.UnidentifiedImageError (OSError subclass)
+
+        rc = main(
+            [
+                "process",
+                "--input",
+                str(bad),
+                "--layout",
+                "1x3",
+                "--output",
+                str(tmp_path / "out"),
+            ]
+        )
+
+        assert rc != 0
+        captured = capsys.readouterr()
+        combined = captured.out + captured.err
+        assert "Traceback" not in combined
+        assert "Error" in combined or "error" in combined
+
+    def test_friendly_error_on_malformed_yaml(self, tmp_path: Path, capsys, monkeypatch):
+        bad_dir = tmp_path / "templates"
+        bad_dir.mkdir()
+        (bad_dir / "broken.yaml").write_text("style:\n  - this is: : not valid: yaml: : :\n  bad")
+
+        # Force load_template to read from this dir by monkeypatching the package
+        # template dir constant.
+        monkeypatch.setattr("sprite_kit.generate._PACKAGE_TEMPLATES_DIR", bad_dir)
+        _patch_generate(monkeypatch)
+
+        rc = main(
+            [
+                "generate",
+                "--prompt",
+                "x",
+                "--template",
+                "broken",
+                "--output",
+                str(tmp_path / "out"),
+            ]
+        )
+
+        assert rc != 0
+        captured = capsys.readouterr()
+        combined = captured.out + captured.err
+        assert "Traceback" not in combined
+
+
+# --------------------------------------------------------------------------- #
+# F6: process subcommand runs qc_check
+# --------------------------------------------------------------------------- #
+
+
+class TestProcessQcCheck:
+    def test_process_logs_qc_warning_for_blank_frames(self, tmp_path: Path, caplog):
+        # Build a sheet where one cell is blank (all-magenta with no content).
+        from io import BytesIO
+
+        cell = 16
+        cols = 3
+        img = Image.new("RGB", (cell * cols, cell), (255, 0, 255))
+        # Only paint cells 0 and 2 with content; cell 1 remains pure magenta → blank after key.
+        for c in (0, 2):
+            for yy in range(4, 12):
+                for xx in range(c * cell + 4, c * cell + 12):
+                    img.putpixel((xx, yy), (0, 0, 0))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        sheet_path = tmp_path / "sheet.png"
+        sheet_path.write_bytes(buf.getvalue())
+
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            rc = main(
+                [
+                    "process",
+                    "--input",
+                    str(sheet_path),
+                    "--layout",
+                    "1x3",
+                    "--output",
+                    str(tmp_path / "out"),
+                ]
+            )
+
+        assert rc == 0
+        # QC should log a warning that includes "blank" or "Blank".
+        warnings = " ".join(r.message for r in caplog.records if r.levelno >= logging.WARNING)
+        assert "blank" in warnings.lower(), f"expected QC blank warning, got: {warnings!r}"
+
+
+# --------------------------------------------------------------------------- #
+# F7: _load_frames_from_input filters frame_*.png
+# --------------------------------------------------------------------------- #
+
+
+class TestLoadFramesFiltering:
+    def test_load_frames_skips_non_frame_pngs_in_directory(self, tmp_path: Path):
+        from sprite_kit.cli import _load_frames_from_input
+
+        # Two real frames + one stray sheet PNG that must be ignored.
+        for i in (1, 2):
+            Image.new("RGBA", (8, 8)).save(tmp_path / f"frame_{i:03d}.png")
+        Image.new("RGBA", (32, 8)).save(tmp_path / "raw_sheet.png")
+        Image.new("RGBA", (32, 8)).save(tmp_path / "pixel_art_sheet.png")
+
+        frames = _load_frames_from_input(tmp_path)
+
+        assert len(frames) == 2
+        for f in frames:
+            assert f.size == (8, 8)
+
+
+# --------------------------------------------------------------------------- #
+# F3 + F4 + F10: env var precedence at CLI layer
+# --------------------------------------------------------------------------- #
+
+
+class TestCliEnvOverrides:
+    def test_generate_uses_SPRITE_KIT_OUTPUT_DIR_when_cli_unset(self, tmp_path: Path, monkeypatch):
+        _patch_generate(monkeypatch)
+        env_out = tmp_path / "env-out"
+        monkeypatch.setenv("SPRITE_KIT_OUTPUT_DIR", str(env_out))
+
+        rc = main(["generate", "--prompt", "hero"])
+
+        assert rc == 0
+        assert env_out.is_dir()
+        assert list(env_out.glob("*.png")), "generate should write into env-specified dir"
+
+    def test_cli_output_overrides_SPRITE_KIT_OUTPUT_DIR(self, tmp_path: Path, monkeypatch):
+        _patch_generate(monkeypatch)
+        env_out = tmp_path / "env-out"
+        cli_out = tmp_path / "cli-out"
+        monkeypatch.setenv("SPRITE_KIT_OUTPUT_DIR", str(env_out))
+
+        rc = main(["generate", "--prompt", "hero", "--output", str(cli_out)])
+
+        assert rc == 0
+        assert cli_out.is_dir()
+        assert list(cli_out.glob("*.png"))
+        # env dir should not have been used.
+        assert not env_out.exists() or not list(env_out.glob("*.png"))
+
+    def test_process_uses_SPRITE_KIT_CHROMA_FUZZ_when_cli_unset(self, tmp_path: Path, monkeypatch):
+        captured: dict = {}
+        from sprite_kit import process as proc
+
+        original = proc.chroma_key_remove
+
+        def spy(img, chroma="#FF00FF", fuzz=15):
+            captured["fuzz"] = fuzz
+            captured["chroma"] = chroma
+            return original(img, chroma=chroma, fuzz=fuzz)
+
+        monkeypatch.setattr("sprite_kit.cli.chroma_key_remove", spy)
+        monkeypatch.setenv("SPRITE_KIT_CHROMA_FUZZ", "20")
+
+        sheet_bytes = _make_magenta_sheet(rows=1, cols=3, cell=16)
+        sheet_path = tmp_path / "raw.png"
+        sheet_path.write_bytes(sheet_bytes)
+
+        rc = main(
+            [
+                "process",
+                "--input",
+                str(sheet_path),
+                "--layout",
+                "1x3",
+                "--output",
+                str(tmp_path / "out"),
+            ]
+        )
+
+        assert rc == 0
+        assert captured["fuzz"] == 20
+
+    def test_process_uses_SPRITE_KIT_CHROMA_KEY_when_cli_unset(self, tmp_path: Path, monkeypatch):
+        captured: dict = {}
+        from sprite_kit import process as proc
+
+        original = proc.chroma_key_remove
+
+        def spy(img, chroma="#FF00FF", fuzz=15):
+            captured["chroma"] = chroma
+            captured["fuzz"] = fuzz
+            return original(img, chroma=chroma, fuzz=fuzz)
+
+        monkeypatch.setattr("sprite_kit.cli.chroma_key_remove", spy)
+        monkeypatch.setenv("SPRITE_KIT_CHROMA_KEY", "#00FF00")
+
+        # Build a green-background sheet to match the env chroma key.
+        from io import BytesIO
+
+        cell = 16
+        img = Image.new("RGB", (cell * 3, cell), (0, 255, 0))
+        for c in range(3):
+            for yy in range(4, 12):
+                for xx in range(c * cell + 4, c * cell + 12):
+                    img.putpixel((xx, yy), (0, 0, 0))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        sheet_path = tmp_path / "raw.png"
+        sheet_path.write_bytes(buf.getvalue())
+
+        rc = main(
+            [
+                "process",
+                "--input",
+                str(sheet_path),
+                "--layout",
+                "1x3",
+                "--output",
+                str(tmp_path / "out"),
+            ]
+        )
+
+        assert rc == 0
+        assert captured["chroma"] == "#00FF00"

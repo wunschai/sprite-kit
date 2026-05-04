@@ -105,6 +105,7 @@ def export_gif(
     frames: list[Image.Image],
     output: str | Path,
     fps: int = 8,
+    bg_color: tuple[int, int, int] = (255, 255, 255),
 ) -> Path:
     """Save frames as animated GIF with a transparent background.
 
@@ -115,6 +116,9 @@ def export_gif(
         frames: List of RGBA images.
         output: Output GIF path.
         fps: Frames per second; frame duration ms = ``round(1000 / fps)``.
+        bg_color: RGB color used to blend semi-transparent edges before
+            quantization (binary alpha softens jaggies). Only fully
+            transparent (alpha=0) pixels remain transparent in the GIF.
 
     Returns:
         Path to written file.
@@ -128,7 +132,7 @@ def export_gif(
         raise ValueError(f"fps must be > 0, got {fps}.")
 
     duration_ms = round(1000 / fps)
-    quantized = [_quantize_for_gif(f) for f in frames]
+    quantized = [_quantize_for_gif(f, bg_color=bg_color) for f in frames]
 
     out_path = Path(output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -228,23 +232,32 @@ def export_metadata(
     return out_path
 
 
-def _quantize_for_gif(frame: Image.Image) -> Image.Image:
+def _quantize_for_gif(
+    frame: Image.Image,
+    bg_color: tuple[int, int, int] = (255, 255, 255),
+) -> Image.Image:
     """Convert an RGBA frame to a palette image with index 0 reserved as transparent.
 
-    Pixels with alpha < 128 are mapped to palette index 0 so GIF's
-    single-color transparency renders cleanly. The remaining 255 palette
-    slots receive the quantized colors of the visible pixels.
+    Semi-transparent pixels are first blended onto ``bg_color`` so GIF's
+    binary alpha doesn't produce jagged edges. Only fully transparent
+    (alpha=0) pixels are mapped to the reserved transparent palette
+    index 0; the remaining 255 slots receive quantized visible colors.
     """
     rgba = frame.convert("RGBA")
-    palette_img = rgba.convert("RGB").quantize(colors=255, method=Image.Quantize.MEDIANCUT)
+    alpha = rgba.split()[3]
+
+    # Composite onto solid bg so semi-transparent edges blend smoothly before
+    # the GIF binary alpha kicks in.
+    blended = Image.new("RGB", rgba.size, bg_color)
+    blended.paste(rgba, mask=alpha)
+    palette_img = blended.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
 
     # Shift every existing palette index up by 1 so index 0 stays free for
     # transparency. ``point`` keeps mode "P".
     shifted = palette_img.point(lambda v: v + 1)
 
-    # Stamp transparent index 0 over pixels whose alpha is below threshold.
-    alpha = rgba.split()[3]
-    transparent_mask = alpha.point(lambda v: 255 if v < 128 else 0)
+    # Stamp transparent index 0 only over fully-transparent pixels (alpha=0).
+    transparent_mask = alpha.point(lambda v: 255 if v == 0 else 0)
     transparent_layer = Image.new("P", shifted.size, 0)
     transparent_layer.putpalette(shifted.getpalette() or [])
     shifted.paste(transparent_layer, mask=transparent_mask)

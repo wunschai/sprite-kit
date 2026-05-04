@@ -357,3 +357,39 @@ def test_generate_sprite_used_prompt_matches_metadata_prompt(monkeypatch):
     _, used_prompt, metadata = generate_sprite("hero", template="pixel_art", client=client)
 
     assert used_prompt == metadata["prompt"]
+
+
+def test_generate_sprite_includes_status_code_and_request_id_in_error(monkeypatch):
+    """SDK exceptions should surface status_code / request_id to aid diagnosis."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-123")
+
+    fake_api_error = type("FakeAPIError", (Exception,), {})
+    raised = fake_api_error("rate limited")
+    raised.status_code = 429
+    raised.request_id = "req_abc123"
+
+    client = MagicMock()
+    client.images.generate.side_effect = raised
+
+    with pytest.raises(GenerateError) as exc_info:
+        generate_sprite("hero", template="pixel_art", client=client)
+
+    msg = str(exc_info.value)
+    assert "status=429" in msg
+    assert "request_id=req_abc123" in msg
+
+
+def test_generate_sprite_omits_diagnostic_fields_when_absent(monkeypatch):
+    """Plain exceptions without status_code/request_id should not crash error path."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-123")
+
+    client = MagicMock()
+    client.images.generate.side_effect = RuntimeError("network down")
+
+    with pytest.raises(GenerateError) as exc_info:
+        generate_sprite("hero", template="pixel_art", client=client)
+
+    msg = str(exc_info.value)
+    assert "network down" in msg
+    assert "status=" not in msg
+    assert "request_id=" not in msg

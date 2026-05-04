@@ -279,6 +279,42 @@ class TestExportGif:
         export_gif(_make_frames(2), out, fps=8)
         assert out.is_file()
 
+    def test_only_alpha_zero_pixels_become_transparent(self, tmp_path: Path):
+        """Semi-transparent pixels should blend onto the bg, not be discarded."""
+        # Build a 3x1 frame: alpha=0, alpha=64 (semi), alpha=200 (mostly opaque).
+        frame = Image.new("RGBA", (3, 1), (0, 0, 0, 0))
+        frame.putpixel((0, 0), (10, 20, 30, 0))
+        frame.putpixel((1, 0), (10, 20, 30, 64))
+        frame.putpixel((2, 0), (10, 20, 30, 200))
+        out = tmp_path / "anim.gif"
+
+        export_gif([frame, frame], out, fps=8)
+
+        gif = Image.open(out)
+        gif.seek(0)
+        rgba = gif.convert("RGBA")
+        # alpha=0 must stay transparent in GIF.
+        assert rgba.getpixel((0, 0))[3] == 0
+        # alpha=64 was previously dropped; now it must be blended (i.e. opaque).
+        assert rgba.getpixel((1, 0))[3] != 0
+        assert rgba.getpixel((2, 0))[3] != 0
+
+    def test_custom_bg_color_blends_semi_transparent_edges(self, tmp_path: Path):
+        """bg_color parameter changes how semi-transparent pixels render."""
+        from sprite_kit.export import export_gif as eg
+
+        frame = Image.new("RGBA", (1, 1), (255, 255, 255, 64))  # mostly transparent white
+        white_out = tmp_path / "white.gif"
+        black_out = tmp_path / "black.gif"
+
+        eg([frame, frame], white_out, fps=8, bg_color=(255, 255, 255))
+        eg([frame, frame], black_out, fps=8, bg_color=(0, 0, 0))
+
+        white_pixel = Image.open(white_out).convert("RGBA").getpixel((0, 0))
+        black_pixel = Image.open(black_out).convert("RGBA").getpixel((0, 0))
+        # On white bg the pixel reads near-white; on black bg it reads dark.
+        assert sum(white_pixel[:3]) > sum(black_pixel[:3])
+
 
 # --------------------------------------------------------------------------- #
 # export_atlas

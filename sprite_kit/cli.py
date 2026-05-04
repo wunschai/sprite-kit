@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
 from PIL import Image
 
 from .config import ConfigError, load_config, require_api_key
@@ -24,8 +25,8 @@ from .export import (
     export_metadata,
     export_sheet,
 )
-from .generate import GenerateError, TemplateError, generate_sprite
-from .process import align_frames, chroma_key_remove, despill, qc_check, split_frames
+from .generate import GenerateError, TemplateError, generate_sprite, load_template
+from .process import align_frames, chroma_key_remove, despill, qc_check, resize, split_frames
 from .utils import ensure_output_dir, get_logger, next_available_path
 
 _DEFAULT_FORMATS = ["png", "sheet", "gif", "atlas"]
@@ -60,7 +61,11 @@ def _add_generate_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--layout", default="1x3", help='Grid layout, e.g. "1x3" (default: 1x3).')
     p.add_argument("--size", default=None, help="Image size override (e.g. 1024x1024).")
     p.add_argument("--quality", default=None, help="Quality override (low/medium/high).")
-    p.add_argument("--output", default="./output", help="Output directory (default: ./output).")
+    p.add_argument(
+        "--output",
+        default=None,
+        help="Output directory (default: $SPRITE_KIT_OUTPUT_DIR or ./output).",
+    )
     p.add_argument("--force", action="store_true", help="Overwrite existing files.")
 
 
@@ -68,15 +73,28 @@ def _add_process_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("process", help="Post-process an existing sheet PNG.")
     p.add_argument("--input", required=True, help="Input sheet PNG path.")
     p.add_argument("--layout", required=True, help='Grid layout, e.g. "1x3".')
-    p.add_argument("--chroma-key", default="#FF00FF", help="Chroma color (default: #FF00FF).")
-    p.add_argument("--fuzz", type=int, default=15, help="Chroma fuzz percent (default: 15).")
+    p.add_argument(
+        "--chroma-key",
+        default=None,
+        help="Chroma color (default: $SPRITE_KIT_CHROMA_KEY or #FF00FF).",
+    )
+    p.add_argument(
+        "--fuzz",
+        type=int,
+        default=None,
+        help="Chroma fuzz percent (default: $SPRITE_KIT_CHROMA_FUZZ or 15).",
+    )
     p.add_argument(
         "--anchor",
         default="bottom-center",
         choices=["bottom-center", "top-center", "center"],
         help="Frame alignment anchor (default: bottom-center).",
     )
-    p.add_argument("--output", default="./output", help="Output directory (default: ./output).")
+    p.add_argument(
+        "--output",
+        default=None,
+        help="Output directory (default: $SPRITE_KIT_OUTPUT_DIR or ./output).",
+    )
     p.add_argument("--force", action="store_true", help="Overwrite existing files.")
 
 
@@ -97,7 +115,11 @@ def _add_export_parser(sub: argparse._SubParsersAction) -> None:
         default=None,
         help="Sheet column count (default: derive from frame count).",
     )
-    p.add_argument("--output", default="./output", help="Output directory (default: ./output).")
+    p.add_argument(
+        "--output",
+        default=None,
+        help="Output directory (default: $SPRITE_KIT_OUTPUT_DIR or ./output).",
+    )
     p.add_argument("--force", action="store_true", help="Overwrite existing files.")
 
 
@@ -117,15 +139,28 @@ def _add_pipeline_parser(sub: argparse._SubParsersAction) -> None:
         help="Output formats (default: png sheet gif atlas).",
     )
     p.add_argument("--fps", type=int, default=8, help="GIF frames per second (default: 8).")
-    p.add_argument("--chroma-key", default="#FF00FF", help="Chroma color (default: #FF00FF).")
-    p.add_argument("--fuzz", type=int, default=None, help="Chroma fuzz percent override.")
+    p.add_argument(
+        "--chroma-key",
+        default=None,
+        help="Chroma color (default: $SPRITE_KIT_CHROMA_KEY or #FF00FF).",
+    )
+    p.add_argument(
+        "--fuzz",
+        type=int,
+        default=None,
+        help="Chroma fuzz percent override (CLI > template > config).",
+    )
     p.add_argument(
         "--anchor",
         default="bottom-center",
         choices=["bottom-center", "top-center", "center"],
         help="Frame alignment anchor (default: bottom-center).",
     )
-    p.add_argument("--output", default="./output", help="Output directory (default: ./output).")
+    p.add_argument(
+        "--output",
+        default=None,
+        help="Output directory (default: $SPRITE_KIT_OUTPUT_DIR or ./output).",
+    )
     p.add_argument("--force", action="store_true", help="Overwrite existing files.")
 
 
@@ -166,6 +201,12 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+    except yaml.YAMLError as exc:
+        print(f"Error: invalid YAML — {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:  # PIL.UnidentifiedImageError, PermissionError, etc.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 # --------------------------------------------------------------------------- #
@@ -174,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_generate(args: argparse.Namespace, log: Any) -> int:
-    out_dir = ensure_output_dir(args.output)
+    cfg = load_config(cli_args=_cli_args_for_config(args))
+    out_dir = ensure_output_dir(_resolve_output(args, cfg))
     raw_bytes, _used_prompt, meta = generate_sprite(
         prompt=args.prompt,
         template=args.template,
@@ -198,12 +240,20 @@ def _cmd_generate(args: argparse.Namespace, log: Any) -> int:
 
 
 def _cmd_process(args: argparse.Namespace, log: Any) -> int:
-    out_dir = ensure_output_dir(args.output)
+    cfg = load_config(cli_args=_cli_args_for_config(args))
+    out_dir = ensure_output_dir(_resolve_output(args, cfg))
     rows, cols = _parse_layout(args.layout)
+    chroma = args.chroma_key if args.chroma_key is not None else cfg["chroma_key"]
+    fuzz = args.fuzz if args.fuzz is not None else cfg["chroma_fuzz"]
     sheet = Image.open(args.input)
     frames = _process_frames(
-        sheet, rows=rows, cols=cols, chroma=args.chroma_key, fuzz=args.fuzz, anchor=args.anchor
+        sheet, rows=rows, cols=cols, chroma=chroma, fuzz=fuzz, anchor=args.anchor
     )
+
+    qc = qc_check(frames)
+    for issue in qc.get("issues", []):
+        log.warning("QC: %s", issue)
+
     paths = _safe_export_frames(frames, out_dir, force=args.force)
     for p in paths:
         log.info("wrote %s", p)
@@ -211,7 +261,8 @@ def _cmd_process(args: argparse.Namespace, log: Any) -> int:
 
 
 def _cmd_export(args: argparse.Namespace, log: Any) -> int:
-    out_dir = ensure_output_dir(args.output)
+    cfg = load_config(cli_args=_cli_args_for_config(args))
+    out_dir = ensure_output_dir(_resolve_output(args, cfg))
     frames = _load_frames_from_input(args.input)
     columns = args.columns if args.columns is not None else len(frames)
     paths = _export_formats(
@@ -242,10 +293,16 @@ def run_pipeline(args: argparse.Namespace, log: Any) -> int:
     cfg = load_config(cli_args=_cli_args_for_config(args))
     require_api_key(cfg)
 
-    out_dir = ensure_output_dir(args.output)
+    out_dir = ensure_output_dir(_resolve_output(args, cfg))
     rows, cols = _parse_layout(args.layout)
-    fuzz = args.fuzz if args.fuzz is not None else cfg["chroma_fuzz"]
-    chroma = args.chroma_key
+
+    # Template post_process block drives chroma fuzz + optional resize step.
+    # Priority: CLI flag > template post_process > config default.
+    tpl = load_template(args.template)
+    post = (tpl.get("style") or {}).get("post_process") or {}
+
+    fuzz = _resolve_fuzz(args, post, cfg)
+    chroma = args.chroma_key if args.chroma_key is not None else cfg["chroma_key"]
 
     raw_bytes, used_prompt, meta = generate_sprite(
         prompt=args.prompt,
@@ -261,6 +318,12 @@ def run_pipeline(args: argparse.Namespace, log: Any) -> int:
     frames = _process_frames(
         sheet, rows=rows, cols=cols, chroma=chroma, fuzz=fuzz, anchor=args.anchor
     )
+
+    target_scale = post.get("target_scale")
+    resize_method = post.get("resize_method", "nearest")
+    if target_scale is not None:
+        frames = [resize(f, scale=float(target_scale), method=resize_method) for f in frames]
+        log.info("resized frames by scale=%s using %s", target_scale, resize_method)
 
     qc = qc_check(frames)
     for issue in qc.get("issues", []):
@@ -378,12 +441,18 @@ def _export_formats(
 
 
 def _load_frames_from_input(input_path: str | Path) -> list[Image.Image]:
-    """Load frames from either a directory of PNGs or a single sheet image."""
+    """Load frames from either a directory of frame_*.png files or a single sheet image.
+
+    Directory mode only picks up files matching ``frame_*.png`` (the prefix
+    used by :func:`sprite_kit.export.export_frames`). This skips sheet PNGs
+    written by previous pipeline runs (e.g. ``raw_sheet.png``,
+    ``pixel_art_sheet.png``) so they don't get reloaded as individual frames.
+    """
     p = Path(input_path)
     if p.is_dir():
-        frame_files = sorted(p.glob("*.png"))
+        frame_files = sorted(p.glob("frame_*.png"))
         if not frame_files:
-            raise FileNotFoundError(f"No PNG frames found in directory: {p}")
+            raise FileNotFoundError(f"No frame_*.png files found in directory: {p}")
         return [Image.open(f).convert("RGBA") for f in frame_files]
     if p.is_file():
         return [Image.open(p).convert("RGBA")]
@@ -401,6 +470,28 @@ def _parse_layout(layout: str) -> tuple[int, int]:
     if rows < 1 or cols < 1:
         raise ValueError(f"--layout dimensions must be >= 1, got {rows}x{cols}.")
     return rows, cols
+
+
+def _resolve_output(args: argparse.Namespace, cfg: dict[str, Any]) -> str:
+    """Resolve output directory: CLI flag > config (env / .env / default)."""
+    cli_value = getattr(args, "output", None)
+    if cli_value is not None:
+        return cli_value
+    return cfg["output_dir"]
+
+
+def _resolve_fuzz(
+    args: argparse.Namespace,
+    post_process: dict[str, Any],
+    cfg: dict[str, Any],
+) -> int:
+    """Pipeline fuzz precedence: CLI flag > template post_process > config default."""
+    if args.fuzz is not None:
+        return int(args.fuzz)
+    template_fuzz = post_process.get("chroma_fuzz")
+    if template_fuzz is not None:
+        return int(template_fuzz)
+    return int(cfg["chroma_fuzz"])
 
 
 def _cli_args_for_config(args: argparse.Namespace) -> dict[str, Any]:

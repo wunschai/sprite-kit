@@ -105,16 +105,16 @@
 
 ### 🔗 修正清單
 
-- [ ] **Fix F1**：`run_pipeline()` 載入模板後讀 `post_process.chroma_fuzz` / `resize_method` / `target_scale`，套用到 process / resize 步驟。優先順序：CLI flag > template post_process > config default。補測試：`tech_futurism` 預設 fuzz=20。
-- [ ] **Fix F2**：`chroma_key_remove` 改為「只把符合 chroma 的 alpha 設 0」，保留既有 alpha；補兩條測試（全透明輸入維持 alpha=0、半透明非洋紅輸入 alpha 保留）。
-- [ ] **Fix F3+F4**：4 個 subcommand 的 `--output` 改 `default=None`、handler 在 None 時查 `cfg["output_dir"]`；同樣處理 process 的 `--fuzz` 與 `--chroma-key`。確保 argparse default 不會蓋過環境變數。
-- [ ] **Fix F5**：`main()` 加 `except (OSError, yaml.YAMLError)` → 印 `Error: <msg>` 不印 traceback；補測試（0-byte PNG 輸入應 rc=1 且 stderr 無 "Traceback"）。
-- [ ] **Fix F6**：`_cmd_process` 對齊後跑 `qc_check`、`log.warning` 印 issues；考慮寫 `process_meta.json`。補測試。
-- [ ] **Fix F7**：`_load_frames_from_input` directory 模式只撈 `frame_*.png`（或加 `--name-prefix`），避免把上輪 sheet 當 frame。
-- [ ] **Fix F8**：`generate_sprite` 的 `except Exception` 把 OpenAI SDK 的 `status_code` / `request_id` / 訊息一併包進 `GenerateError`，提升可診斷性。
-- [ ] **Fix F9**：`_quantize_for_gif` alpha 二值化前先做 alpha-blend 到中性背景色（或讓使用者用 `--gif-bg-color` 指定），減少半透明邊緣鋸齒；補相容性測試。
-- [ ] **Fix F10**：`tests/test_cli.py` 補 CLI 層環境變數優先順序測試（覆蓋 `SPRITE_KIT_OUTPUT_DIR` / `SPRITE_KIT_CHROMA_FUZZ` 等核心 key），守住 F3+F4 修正不回歸。
-- [ ] **Fix Docs**：在 `works.md` 加「Post-review Hardening」章節記錄修正內容、驗收結果。
+- [x] **Fix F1**：`run_pipeline()` 載入模板後讀 `post_process.chroma_fuzz` / `resize_method` / `target_scale`，套用到 process / resize 步驟。優先順序：CLI flag > template post_process > config default。補測試：`tech_futurism` 預設 fuzz=20。
+- [x] **Fix F2**：`chroma_key_remove` 改為「只把符合 chroma 的 alpha 設 0」，保留既有 alpha；補兩條測試（全透明輸入維持 alpha=0、半透明非洋紅輸入 alpha 保留）。
+- [x] **Fix F3+F4**：4 個 subcommand 的 `--output` 改 `default=None`、handler 在 None 時查 `cfg["output_dir"]`；同樣處理 process 的 `--fuzz` 與 `--chroma-key`。確保 argparse default 不會蓋過環境變數。
+- [x] **Fix F5**：`main()` 加 `except (OSError, yaml.YAMLError)` → 印 `Error: <msg>` 不印 traceback；補測試（0-byte PNG 輸入應 rc=1 且 stderr 無 "Traceback"）。
+- [x] **Fix F6**：`_cmd_process` 對齊後跑 `qc_check`、`log.warning` 印 issues；考慮寫 `process_meta.json`。補測試。
+- [x] **Fix F7**：`_load_frames_from_input` directory 模式只撈 `frame_*.png`（或加 `--name-prefix`），避免把上輪 sheet 當 frame。
+- [x] **Fix F8**：`generate_sprite` 的 `except Exception` 把 OpenAI SDK 的 `status_code` / `request_id` / 訊息一併包進 `GenerateError`，提升可診斷性。
+- [x] **Fix F9**：`_quantize_for_gif` alpha 二值化前先做 alpha-blend 到中性背景色（或讓使用者用 `--gif-bg-color` 指定），減少半透明邊緣鋸齒；補相容性測試。
+- [x] **Fix F10**：`tests/test_cli.py` 補 CLI 層環境變數優先順序測試（覆蓋 `SPRITE_KIT_OUTPUT_DIR` / `SPRITE_KIT_CHROMA_FUZZ` 等核心 key），守住 F3+F4 修正不回歸。
+- [x] **Fix Docs**：在 `works.md` 加「Post-review Hardening」章節記錄修正內容、驗收結果。
 
 
 ### 1. Spec 覆蓋度

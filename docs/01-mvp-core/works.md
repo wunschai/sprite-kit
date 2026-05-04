@@ -159,3 +159,58 @@ M3 內部 task 之間有強依賴（CLI 需要 utils 的 `next_available_path`�
 | 2026-05-04 | 補上 Tasks 1.2–1.6 的開發紀錄與 Coordinator 驗收結果 |
 | 2026-05-04 | M2 完成：[A]/[B]/[C] 三條工作線平行開發；110 tests 全綠 |
 | 2026-05-04 | M3 完成：CLI + pipeline + utils + README + integration test 結構；146 tests 全綠（4 deselected） |
+| 2026-05-04 | Post-review Hardening：9 條 cross-review findings 全修；165 tests 全綠（4 deselected） |
+
+---
+
+## Post-review Hardening（2026-05-04）
+
+**背景**：`/ddd.xreview` 平行派 opus + haiku reviewer 審查 c312626..d02809a，找出 9 條 findings（3 Critical + 3 Important + 3 Nice-to-have），coordinator 全驗證為真，使用者授權「全部修」。
+
+**模式**：序列（單一 worker），TDD（每條 finding 先 Red 再 Green）。
+
+### 修正清單
+
+| ID | 嚴重度 | 修正點 | 測試 |
+|----|--------|--------|------|
+| F1 | Critical | `run_pipeline()` 讀 template `post_process.chroma_fuzz` / `resize_method` / `target_scale`；新增 `_resolve_fuzz()` 套用 CLI > template > config 三層優先順序；`target_scale` 觸發 `resize()` step | `TestPipelineTemplatePostProcess` × 4 |
+| F2 | Critical | `chroma_key_remove` 用 `np.minimum(existing, mask)` 保留輸入 alpha；spec §8 idempotent 承諾兌現 | `test_preserves_existing_transparent_pixels` / `test_preserves_partial_alpha_on_non_chroma` / `test_idempotent_on_rgba_input` |
+| F3+F4 | Critical | 4 個 subcommand 的 `--output`、process / pipeline 的 `--fuzz` / `--chroma-key` 全部改 `default=None`；4 個 handler 在缺值時查 `cfg`，恢復 AC-7 優先順序 | `TestCliEnvOverrides` × 4 |
+| F5 | Important | `main()` 增 `except (yaml.YAMLError, OSError)` → 印 `Error: <msg>` 不噴 traceback；涵蓋 `PIL.UnidentifiedImageError` / 畸形 YAML | `TestFriendlyErrors` × 2 |
+| F6 | Important | `_cmd_process` 在對齊後加 `qc_check` + `log.warning`，與 pipeline 對齊 | `test_process_logs_qc_warning_for_blank_frames` |
+| F7 | Important | `_load_frames_from_input` directory 模式改 `frame_*.png` glob，避免把 sheet PNG 當 frame | `test_load_frames_skips_non_frame_pngs_in_directory` |
+| F8 | Nice | `generate_sprite` 的 except 把 SDK `status_code` / `request_id` 包進 `GenerateError` | `test_generate_sprite_includes_status_code_and_request_id_in_error` / `test_generate_sprite_omits_diagnostic_fields_when_absent` |
+| F9 | Nice | `_quantize_for_gif` 在二值化前 blend 到 `bg_color`（預設白）；只有 alpha=0 才透明，半透明邊緣不再鋸齒；`export_gif` 新增 `bg_color` 參數 | `test_only_alpha_zero_pixels_become_transparent` / `test_custom_bg_color_blends_semi_transparent_edges` |
+| F10 | Nice | 補 `TestCliEnvOverrides` 4 條 e2e env-var 測試守住 F3+F4 不回歸 | 含於 F3+F4 行 |
+
+### 影響範圍
+
+- `sprite_kit/cli.py`：F1（pipeline 讀 template post_process）、F3+F4（4 default 改 None + handler 端 fallback 至 cfg）、F5（main 多 except）、F6（_cmd_process 加 qc）、F7（glob 改 `frame_*.png`），新增 helper `_resolve_output` / `_resolve_fuzz`
+- `sprite_kit/process.py`：F2（`chroma_key_remove` `np.minimum`）
+- `sprite_kit/generate.py`：F8（SDK 例外擴充 detail）
+- `sprite_kit/export.py`：F9（`_quantize_for_gif` blend + `export_gif` 新增 `bg_color` 參數）
+- `tests/test_*.py`：對應 19 條新測試
+- `docs/01-mvp-core/tasks.md`：勾選 9 條 fixes
+- `docs/01-mvp-core/works.md`：本章節
+
+### 驗收結果
+
+- `pytest tests/ -v` → **165 passed, 4 deselected in 0.95s**（146 baseline + 19 新測試）
+- `ruff check .` → All checks passed
+- `ruff format --check .` → 18 files already formatted
+- `sprite-kit --help` / 4 個 subcommand `--help` → 全部正常列出 usage、`--output` help 文字提到 `$SPRITE_KIT_OUTPUT_DIR` fallback
+
+### 技術決策
+
+- **F1 優先順序明確化**：`_resolve_fuzz()` helper 把「CLI > template post_process > config」寫成單函式，避免散落在 if/else。process subcommand 沒有 template 概念，所以走 `_cmd_process` 的「CLI > config」兩層；pipeline 才走三層。
+- **F2 用 `np.minimum`**：保證單調遞減，是 idempotent 的最直觀寫法（`min(existing, 0) = 0` 對 chroma 像素；`min(existing, 255) = existing` 對非 chroma 像素）。原本 RGB 輸入經 `convert("RGBA")` 自帶 alpha=255，與 `min(255, 255) = 255` 不衝突，所以不影響舊測試。
+- **F5 例外順序**：`yaml.YAMLError` / `OSError` 放在 `ValueError` 之後維持風格；class 不重疊故順序不影響語意。
+- **F7 glob 範圍**：選 `frame_*.png` 與 `export_frames` 的預設 prefix 對齊。需求若日後需要 custom prefix 可再加 flag，目前不擴大 surface。
+- **F9 `bg_color` 參數而非 CLI flag**：保持 CLI 簡潔，純函式介面提供給 Python API 使用者；測試用 explicit kwarg 驗證。
+- **沒動 `__init__.py` 公開介面**：`export_gif` 新增的 `bg_color` 是 keyword-only 帶 default，向下相容；`load_template` 已 export，cli.py 直接 import 即可。
+
+### 邊界遵守
+
+- 沒動 `sprite_kit/config.py` / `sprite_kit/utils.py` / `templates/*.yaml` / `pyproject.toml` / `requirements.txt` / spec.md / PRD.md / TECHSTACK.md / CLAUDE.md / README*.md / `.claude/`
+- 沒新增依賴
+- 沒刪除既有測試（F2 修正後原 `test_pure_chroma_pixels_become_transparent` 等仍綠）
