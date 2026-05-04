@@ -37,13 +37,13 @@
 > **驗證方式**：`uv run pytest tests/test_process.py -v` 全過
 > **涵蓋 AC**：AC-2、AC-3
 
-- [ ] **Task 2.A.1**：製作 `tests/fixtures/sample_sheet.png`（1×3 grid、#FF00FF 背景、簡單形狀，可重現）
-- [ ] **Task 2.A.2**：撰寫 `chroma_key_remove` + `despill` 測試（背景消除、邊緣 alpha、despill 後無洋紅暈）(Red)
-- [ ] **Task 2.A.3**：實作 `chroma_key_remove` + `despill` (Green)
-- [ ] **Task 2.A.4**：撰寫 `split_frames` + `align_frames` 測試（rows×cols 切割、anchor 對齊、AC-3 腳底 y 一致誤差 ≤ 1px）(Red)
-- [ ] **Task 2.A.5**：實作 `split_frames` + `align_frames` (Green)
-- [ ] **Task 2.A.6**：撰寫 `resize` + `qc_check` 測試（nearest vs lanczos、空白幀偵測、尺寸一致性）(Red)
-- [ ] **Task 2.A.7**：實作 `resize` + `qc_check` (Green)
+- [x] **Task 2.A.1**：製作 `tests/fixtures/sample_sheet.png`（1×3 grid、#FF00FF 背景、簡單形狀，可重現）
+- [x] **Task 2.A.2**：撰寫 `chroma_key_remove` + `despill` 測試（背景消除、邊緣 alpha、despill 後無洋紅暈）(Red)
+- [x] **Task 2.A.3**：實作 `chroma_key_remove` + `despill` (Green)
+- [x] **Task 2.A.4**：撰寫 `split_frames` + `align_frames` 測試（rows×cols 切割、anchor 對齊、AC-3 腳底 y 一致誤差 ≤ 1px）(Red)
+- [x] **Task 2.A.5**：實作 `split_frames` + `align_frames` (Green)
+- [x] **Task 2.A.6**：撰寫 `resize` + `qc_check` 測試（nearest vs lanczos、空白幀偵測、尺寸一致性）(Red)
+- [x] **Task 2.A.7**：實作 `resize` + `qc_check` (Green)
 
 **[B] export.py — 匯出管線** — `isolation: worktree`
 
@@ -53,12 +53,12 @@
 > **驗證方式**：`uv run pytest tests/test_export.py -v` 全過
 > **涵蓋 AC**：AC-4
 
-- [ ] **Task 2.B.1**：撰寫 `export_frames` + `export_sheet` 測試（檔名 `frame_001.png` 序號補零、sheet 透明背景、columns 對齊）(Red)
-- [ ] **Task 2.B.2**：實作 `export_frames` + `export_sheet` (Green)
-- [ ] **Task 2.B.3**：撰寫 `export_gif` 測試（透明背景、FPS 與參數一致、可被 PIL 重新讀取驗證幀數）(Red)
-- [ ] **Task 2.B.4**：實作 `export_gif` (Green)
-- [ ] **Task 2.B.5**：撰寫 `export_atlas` + `export_metadata` 測試（JSON schema 符合 spec 第 6.3 節範例、可被 `json.loads` 解析）(Red)
-- [ ] **Task 2.B.6**：實作 `export_atlas` + `export_metadata` (Green)
+- [x] **Task 2.B.1**：撰寫 `export_frames` + `export_sheet` 測試（檔名 `frame_001.png` 序號補零、sheet 透明背景、columns 對齊）(Red)
+- [x] **Task 2.B.2**：實作 `export_frames` + `export_sheet` (Green)
+- [x] **Task 2.B.3**：撰寫 `export_gif` 測試（透明背景、FPS 與參數一致、可被 PIL 重新讀取驗證幀數）(Red)
+- [x] **Task 2.B.4**：實作 `export_gif` (Green)
+- [x] **Task 2.B.5**：撰寫 `export_atlas` + `export_metadata` 測試（JSON schema 符合 spec 第 6.3 節範例、可被 `json.loads` 解析）(Red)
+- [x] **Task 2.B.6**：實作 `export_atlas` + `export_metadata` (Green)
 
 **[C] generate.py + templates — 生成與 prompt 模板** — `isolation: worktree`
 
@@ -68,12 +68,12 @@
 > **驗證方式**：`uv run pytest tests/test_generate.py -v` 全過（OpenAI client 用 `unittest.mock`）
 > **涵蓋 AC**：AC-5、AC-7（部分）
 
-- [ ] **Task 2.C.1**：撰寫模板載入器測試（base.yaml 解析、extends 繼承、自訂模板從 `templates/` 載入）(Red)
-- [ ] **Task 2.C.2**：實作模板載入器 + 撰寫 `base.yaml` 與 4 個內建模板 YAML（依 spec 第 7.2 節規格）(Green)
-- [ ] **Task 2.C.3**：撰寫 prompt 組裝測試（自動附加色鍵背景、幀一致性指令、模板 style_keywords 注入）(Red)
-- [ ] **Task 2.C.4**：實作 prompt 組裝邏輯 (Green)
-- [ ] **Task 2.C.5**：撰寫 `generate_sprite` 測試（mock OpenAI client、回傳 tuple 結構、缺 API key 錯誤訊息）(Red)
-- [ ] **Task 2.C.6**：實作 `generate_sprite` (Green)
+- [x] **Task 2.C.1**：撰寫模板載入器測試（base.yaml 解析、extends 繼承、自訂模板從 `templates/` 載入）(Red)
+- [x] **Task 2.C.2**：實作模板載入器 + 撰寫 `base.yaml` 與 4 個內建模板 YAML（依 spec 第 7.2 節規格）(Green)
+- [x] **Task 2.C.3**：撰寫 prompt 組裝測試（自動附加色鍵背景、幀一致性指令、模板 style_keywords 注入）(Red)
+- [x] **Task 2.C.4**：實作 prompt 組裝邏輯 (Green)
+- [x] **Task 2.C.5**：撰寫 `generate_sprite` 測試（mock OpenAI client、回傳 tuple 結構、缺 API key 錯誤訊息）(Red)
+- [x] **Task 2.C.6**：實作 `generate_sprite` (Green)
 
 ---
 

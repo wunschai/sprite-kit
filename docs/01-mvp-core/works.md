@@ -53,9 +53,62 @@
 
 ---
 
+## Milestone 2: 核心模組（平行 [A] / [B] / [C]）
+
+### 派發決策
+
+**日期**：2026-05-04
+**模式**：平行（coordinator 派發 3 個 ddd-developer 到獨立 worktree）
+**模型**：Opus（Sonnet quota 那天用罄；M1 經驗顯示 Opus 對複雜邏輯較穩）
+
+三條工作線檔案範圍互不重疊，介面契約全部在 spec 第 5.2、6.2、6.3、7 節定義。Worker 被明確禁止動 `__init__.py` — 由 coordinator 在匯合點統一更新公開 API，避免並行 merge conflict。
+
+### Worker 結果
+
+| 工作線 | 函式 / 檔案 | 測試 | Lint |
+|--------|-------------|------|------|
+| [A] process.py | `chroma_key_remove`, `despill`, `split_frames`, `align_frames`, `resize`, `qc_check` + `tests/fixtures/sample_sheet.png` | 34 passed | clean |
+| [B] export.py | `export_frames`, `export_sheet`, `export_gif`, `export_atlas`, `export_metadata` | 38 passed | clean |
+| [C] generate.py + templates | `load_template`, `assemble_prompt`, `generate_sprite` + 4 模板 + custom example | 23 passed | clean |
+
+### 合併過程
+
+逐一 merge（每次跑全測試確認沒破壞既有功能）：
+
+1. merge [A] → 49 passed (15 config + 34 process)
+2. merge [B] → 87 passed (+38 export)
+3. merge [C] → 110 passed (+23 generate)
+
+無 merge conflict — 檔案範圍劃分有效。
+
+### Coordinator 匯合點工作
+
+更新 `sprite_kit/__init__.py`：re-export 三個 worker 模組的所有公開 API（4 個 exception class + 17 個函式），同時保持 AC-6「`from sprite_kit.process import chroma_key_remove` 等直接 module import」可用。
+
+### 技術決策
+
+- **`process.chroma_key_remove`**：用 numpy vectorized RGB Euclidean distance（避免 per-pixel Python loop）；fuzz 百分比換算為 RGB 空間距離閾值
+- **`process.align_frames`**：對每幀計算 alpha>0 的 bounding box，找出最大 bbox 作為統一 canvas size；bottom-center 對齊保證 AC-3「腳底 y 一致 ≤ 1px」
+- **`export.export_gif`**：透明背景靠 Pillow `quantize` + `disposal=2` + `transparency` index 實現；單色透明（GIF 限制），測試明確標記 10ms-tick 儲存粒度
+- **`export.export_atlas`**：MVP 假設水平單列佈局；多列 atlas 由呼叫端組合
+- **`generate.load_template`**：支援單層 `extends: base` 繼承，`style.post_process` 用 deep-merge（dict update）；MVP 不支援多層繼承避免複雜化
+- **`generate.generate_sprite`**：reuse `config.require_api_key`；測試用 `MagicMock` mock OpenAI client 避免真實 API 呼叫；CLI override > template recommendation > config default 的優先順序
+- **ADR-3 延後**：worker 都不處理輸出檔衝突（直接覆寫），M3 補 utils.py 的 `next_available_path` helper 後再決定怎麼包裝
+
+### Coordinator 驗收
+
+於主分支 merge 完成後親跑（`.venv-coord`）：
+- `pytest tests/ -v` → **110 passed in 0.66s**
+- `ruff check .` → All checks passed
+- `ruff format --check .` → 14 files already formatted
+- 公開 API smoke test：`from sprite_kit import ...` 與 `from sprite_kit.process import ...` 皆 OK（AC-6）
+
+---
+
 ## 變更記錄
 
 | 日期 | 變更 |
 |------|------|
 | 2026-05-04 | 初版；記錄 Task 1.1 的 ADR 決策 |
 | 2026-05-04 | 補上 Tasks 1.2–1.6 的開發紀錄與 Coordinator 驗收結果 |
+| 2026-05-04 | M2 完成：[A]/[B]/[C] 三條工作線平行開發；110 tests 全綠 |
