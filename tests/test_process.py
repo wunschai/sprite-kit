@@ -111,6 +111,37 @@ class TestChromaKeyRemove:
         assert out.getpixel((150, 0))[3] == 0
         assert out.getpixel((299, 99))[3] == 0
 
+    def test_preserves_existing_transparent_pixels(self):
+        """spec §8: re-running chroma key on an RGBA must not 'unhide' alpha=0 pixels."""
+        # A pre-transparent pixel whose RGB is NOT chroma (black) must stay transparent.
+        img = Image.new("RGBA", (2, 1), (0, 0, 0, 0))
+
+        out = chroma_key_remove(img)
+
+        assert out.getpixel((0, 0))[3] == 0
+        assert out.getpixel((1, 0))[3] == 0
+
+    def test_preserves_partial_alpha_on_non_chroma(self):
+        """Non-chroma pixels keep their original alpha (monotonic non-increase)."""
+        img = Image.new("RGBA", (1, 1), (0, 100, 200, 128))  # semi-transparent blue
+
+        out = chroma_key_remove(img)
+
+        # Alpha must not be lifted above the input value.
+        assert out.getpixel((0, 0))[3] <= 128
+
+    def test_idempotent_on_rgba_input(self):
+        """spec §8: applying chroma key twice on an already-keyed image is a no-op."""
+        img = Image.new("RGBA", (4, 4), (255, 0, 255, 255))
+        ImageDraw.Draw(img).rectangle((1, 1, 2, 2), fill=(0, 0, 0, 255))
+
+        once = chroma_key_remove(img)
+        twice = chroma_key_remove(once)
+
+        import numpy as np
+
+        assert np.array_equal(np.array(once), np.array(twice))
+
 
 # ---------------------------------------------------------------------------
 # despill

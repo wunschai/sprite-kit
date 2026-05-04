@@ -188,10 +188,15 @@ def generate_sprite(
             n=1,
         )
     except Exception as exc:  # noqa: BLE001 — wrap any SDK error with an actionable message
-        raise GenerateError(
-            f"OpenAI image API call failed: {exc}. "
-            "Check network access, API key validity, and request parameters."
-        ) from exc
+        detail_parts = [f"OpenAI image API call failed: {exc}"]
+        status = getattr(exc, "status_code", None)
+        if status is not None:
+            detail_parts.append(f"status={status}")
+        req_id = getattr(exc, "request_id", None)
+        if req_id is not None:
+            detail_parts.append(f"request_id={req_id}")
+        detail_parts.append("Check network access, API key validity, and request parameters.")
+        raise GenerateError(". ".join(detail_parts)) from exc
 
     image_bytes = _decode_png(response)
 

@@ -51,7 +51,11 @@ def chroma_key_remove(
     distance_sq = (diff * diff).sum(axis=-1)
 
     mask_bg = distance_sq <= (threshold * threshold)
-    arr[..., 3] = np.where(mask_bg, 0, 255).astype(np.uint8)
+    # Preserve existing alpha so re-applying chroma key on an already-keyed
+    # image is a no-op (spec §8). np.minimum guarantees monotonic non-increase:
+    # chroma pixels collapse to 0; non-chroma pixels retain their input alpha.
+    existing_alpha = arr[..., 3]
+    arr[..., 3] = np.minimum(existing_alpha, np.where(mask_bg, 0, 255)).astype(np.uint8)
     return Image.fromarray(arr, mode="RGBA")
 
 
