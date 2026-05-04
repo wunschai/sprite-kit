@@ -280,7 +280,7 @@ variables:
 | API 回傳非 PNG / 截斷 | 拋出明確例外，不靜默繼續 |
 | `--layout 1x3` 但圖實際只能切出 2 幀有效內容 | QC 報告標記空白幀，使用者可選擇繼續或停止 |
 | 模板檔不存在 | 列出可用模板清單 |
-| `--output` 目錄已存在檔案 | 預設詢問或加數字後綴（待 ADR-3 決定） |
+| `--output` 目錄已存在檔案 | 預設自動加數字後綴（如 `frame_001-2.png`）；指定 `--force` 則直接覆寫（ADR-3） |
 | 透明圖再過一次 chroma key | 不破壞既有 alpha，no-op |
 | 發光效果（tech_futurism）邊緣洋紅殘留 | 模板自動套用 `chroma_fuzz=20` |
 
@@ -300,15 +300,23 @@ variables:
 
 ### ADR-3：輸出檔衝突處理
 
-- **狀態**：待決定
-- **選項**：覆寫 / 詢問 / 自動加後綴 / `--force` flag
-- **預設傾向**：自動加後綴 + `--force` 覆寫
+- **狀態**：已決定（2026-05-04）
+- **決定**：預設自動加後綴；提供 `--force` flag 改為直接覆寫
+- **行為細節**：
+  - 寫入 `frame_001.png` 時，若目標已存在，改寫 `frame_001-2.png`、`frame_001-3.png`，依序遞增直到找到未占用的檔名
+  - 對 sprite sheet / atlas / gif 等單檔輸出同樣套用後綴規則
+  - `--force` flag 會略過後綴邏輯、直接覆寫既有檔案
+- **理由**：對 CI / 自動化管線友善（不會中斷），同時保留直觀的覆寫管道；放棄「詢問」是因為 sprite-kit 預期會被批次與管線呼叫
 
 ### ADR-4：Lint / Format 與套件管理工具
 
-- **狀態**：待決定
-- **建議**：`ruff` + `ruff format`，套件管理用 `uv`（依 AGENTS.md 工具偏好）
-- **確認方式**：在 `/ddd.tasks` 階段定下，否則 `tasks.md` 無法精確列出開發環境設置任務
+- **狀態**：已決定（2026-05-04）
+- **決定**：`ruff check` + `ruff format` + `uv`
+- **行為細節**：
+  - `pyproject.toml` 用 `[tool.ruff]` 區段配置 lint / format 規則；line-length 預設 100
+  - 套件管理改用 `uv`（`uv pip install -e .`、`uv run pytest`、`uv run ruff check .`）
+  - 仍保留 `requirements.txt` 與 `setup.py` 後備，讓沒裝 uv 的使用者能用 `pip install -e .`
+- **理由**：符合 `.claude/references/AGENTS.md` 工具偏好；ruff 可一次取代 black/flake8/isort/pyupgrade，uv 提供 lockfile 與快速安裝
 
 ## 10. 測試策略
 
@@ -321,3 +329,4 @@ variables:
 | 日期 | 變更 | 來源 |
 |------|------|------|
 | 2026-05-04 | 初版，從 `docs/00-source-spec.md` 切分 | 使用者提供原始規格書 |
+| 2026-05-04 | ADR-3 / ADR-4 定案；同步更新第 8 節衝突處理欄位 | `/ddd.work` Task 1.1 使用者決策 |

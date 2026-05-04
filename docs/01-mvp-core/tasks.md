@@ -12,7 +12,7 @@
 > **驗證方式**：`uv run pytest tests/test_config.py -v` 全過 + `ruff check .` 無錯誤
 > **涵蓋 AC**：AC-7（設定優先順序），鋪路給後續 milestone
 
-- [ ] **Task 1.1**：定下 ADR-3（輸出檔衝突）與 ADR-4（lint / format / package manager）— 更新 `spec.md` 與 `works.md` 記錄決策
+- [x] **Task 1.1**：定下 ADR-3（輸出檔衝突）與 ADR-4（lint / format / package manager）— 更新 `spec.md` 與 `works.md` 記錄決策
 - [ ] **Task 1.2**：建立 `pyproject.toml`（依 ADR-4 結果使用 uv + ruff）+ `requirements.txt` 後備 + `setup.py`（pip install 相容）
 - [ ] **Task 1.3**：建立 `sprite_kit/` 套件骨架（空模組檔 + `__init__.py` 註冊公開 API）+ `tests/` 目錄結構 + `tests/__init__.py`
 - [ ] **Task 1.4**：建立 `.env.example`（列出 spec 第 6.1 節環境變數）+ 補強 `.gitignore`（venv、`*.egg-info`、output、cache）
