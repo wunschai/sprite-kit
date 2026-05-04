@@ -28,6 +28,29 @@
   - `uv` 提供 lockfile（`uv.lock`）與快速安裝，可同時取代 `pip` 與 `venv`
 - 後備：保留 `requirements.txt` + `setup.py`，使用者沒裝 uv 也能 `pip install -e .`
 
+### Tasks 1.2–1.6 — 套件骨架 + config loader
+
+**日期**：2026-05-04
+**派發**：`ddd-developer` (Opus, isolation: worktree)
+
+**結果**：15 tests passed、`ruff check` clean、`ruff format --check` clean、`uv pip install -e .` 成功。
+
+**技術決策與細節**
+
+- `config.py` 用 `dotenv_values(path)` 而非 `dotenv.load_dotenv()`，避免汙染 `os.environ`，讓測試可以用 `monkeypatch` 完全隔離。設一條測試 `test_dotenv_does_not_pollute_os_environ` 守住此不變式
+- `_resolve` 對普通 config key 用 `is not None` 判斷，但 `_resolve_api_key` 用 truthiness — 故意不對稱：讓 `.env.example` 中的 `OPENAI_API_KEY=`（空字串）被視為「未設定」，使用者 copy 模板不會立刻觸發 `require_api_key` 的錯誤
+- `chroma_fuzz` 走 `_INT_KEYS` 白名單做 cast；非整數值會拋 `ConfigError` 帶具體錯誤訊息（含環境變數名與原始值）
+- `pyproject.toml` 用 `[project.scripts]` 註冊 `sprite-kit = "sprite_kit.cli:main"`，所以 `cli.py` 必須存在 `main()` 即使是 stub（NotImplementedError）。Milestone 3 會填正式邏輯
+
+**Coordinator 驗收**
+
+於主分支 merge 後親跑（`.venv-coord`）：
+- `pytest tests/ -v` → 15 passed
+- `ruff check .` → All checks passed
+- `ruff format --check .` → 20 files already formatted
+
+**檔案清單**：見 commit `feat(01-mvp-core): scaffold package and implement config loader (M1)`
+
 ---
 
 ## 變更記錄
@@ -35,3 +58,4 @@
 | 日期 | 變更 |
 |------|------|
 | 2026-05-04 | 初版；記錄 Task 1.1 的 ADR 決策 |
+| 2026-05-04 | 補上 Tasks 1.2–1.6 的開發紀錄與 Coordinator 驗收結果 |

@@ -13,11 +13,11 @@
 > **涵蓋 AC**：AC-7（設定優先順序），鋪路給後續 milestone
 
 - [x] **Task 1.1**：定下 ADR-3（輸出檔衝突）與 ADR-4（lint / format / package manager）— 更新 `spec.md` 與 `works.md` 記錄決策
-- [ ] **Task 1.2**：建立 `pyproject.toml`（依 ADR-4 結果使用 uv + ruff）+ `requirements.txt` 後備 + `setup.py`（pip install 相容）
-- [ ] **Task 1.3**：建立 `sprite_kit/` 套件骨架（空模組檔 + `__init__.py` 註冊公開 API）+ `tests/` 目錄結構 + `tests/__init__.py`
-- [ ] **Task 1.4**：建立 `.env.example`（列出 spec 第 6.1 節環境變數）+ 補強 `.gitignore`（venv、`*.egg-info`、output、cache）
-- [ ] **Task 1.5**：撰寫 `tests/test_config.py`（CLI 參數 > env > .env > default 優先順序、缺 `OPENAI_API_KEY` 錯誤訊息）(Red)
-- [ ] **Task 1.6**：實作 `sprite_kit/config.py` 通過 Task 1.5 測試 (Green)
+- [x] **Task 1.2**：建立 `pyproject.toml`（依 ADR-4 結果使用 uv + ruff）+ `requirements.txt` 後備 + `setup.py`（pip install 相容）
+- [x] **Task 1.3**：建立 `sprite_kit/` 套件骨架（空模組檔 + `__init__.py` 註冊公開 API）+ `tests/` 目錄結構 + `tests/__init__.py`
+- [x] **Task 1.4**：建立 `.env.example`（列出 spec 第 6.1 節環境變數）+ 補強 `.gitignore`（venv、`*.egg-info`、output、cache）
+- [x] **Task 1.5**：撰寫 `tests/test_config.py`（CLI 參數 > env > .env > default 優先順序、缺 `OPENAI_API_KEY` 錯誤訊息）(Red)
+- [x] **Task 1.6**：實作 `sprite_kit/config.py` 通過 Task 1.5 測試 (Green)
 
 ---
 
