@@ -1,0 +1,15 @@
+extends: base
+style:
+  name: "brutalism"
+  prompt_prefix: "Create a set of brutalist-style game assets"
+  style_keywords:
+    - "raw concrete texture"
+    - "harsh geometric forms"
+    - "minimal color palette using only black, white, and rust orange"
+    - "heavy visual weight with sharp edges"
+    - "flat lighting, no gradients, no rounded corners"
+    - "architectural brutalism applied to game design"
+  size_recommendation: "1024x1024"
+  quality_recommendation: "medium"
+  post_process:
+    resize_method: "lanczos"
