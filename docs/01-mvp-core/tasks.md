@@ -85,14 +85,14 @@
 
 ### 🔗 匯合點
 
-- [ ] **Task 3.1**：撰寫 `tests/test_cli.py`（argparse 子命令分派、`--help` 可用、缺必要參數錯誤訊息）(Red)
-- [ ] **Task 3.2**：實作 `sprite_kit/cli.py` — `generate` / `process` / `export` / `pipeline` 4 個子命令分派 (Green)
-- [ ] **Task 3.3**：撰寫 `tests/integration/test_pipeline.py`（mock generate、串接真實 process + export，驗證 fire-mage smoke 案例端到端可跑）(Red)
-- [ ] **Task 3.4**：實作 `pipeline` 串接邏輯 (Green)
-- [ ] **Task 3.5**：補 `sprite_kit/utils.py`（共用工具：檔名序號、輸出目錄處理、log helper）+ 對應測試
-- [ ] **Task 3.6**：撰寫 `README.md`（英文總覽 + 5 種整合方式）+ `README.zh-TW.md`（繁中對照）
-- [ ] **Task 3.7**：標記 `@pytest.mark.integration` 整合測試 — 用真實 `OPENAI_API_KEY` 跑 4 個模板各 1 次，確認 AC-5 全綠（CI 預設不跑，本地用 `pytest -m integration` 觸發）
-- [ ] **Task 3.8**：更新 `tasks.md`（勾選完成項）+ `works.md`（記錄各 milestone 決策與遇到的問題）
+- [x] **Task 3.1**：撰寫 `tests/test_cli.py`（argparse 子命令分派、`--help` 可用、缺必要參數錯誤訊息）(Red)
+- [x] **Task 3.2**：實作 `sprite_kit/cli.py` — `generate` / `process` / `export` / `pipeline` 4 個子命令分派 (Green)
+- [x] **Task 3.3**：撰寫 `tests/integration/test_pipeline.py`（mock generate、串接真實 process + export，驗證 fire-mage smoke 案例端到端可跑）(Red)
+- [x] **Task 3.4**：實作 `pipeline` 串接邏輯 (Green)
+- [x] **Task 3.5**：補 `sprite_kit/utils.py`（共用工具：檔名序號、輸出目錄處理、log helper）+ 對應測試
+- [x] **Task 3.6**：撰寫 `README.md`（英文總覽 + 5 種整合方式）+ `README.zh-TW.md`（繁中對照）
+- [x] **Task 3.7（部分）**：在 `tests/integration/test_pipeline.py` 寫好 `@pytest.mark.integration` 真實 API 測試骨架（4 模板各 1 次）— 標記 + 結構就位，使用者本地手動跑 `pytest -m integration` 觸發
+- [x] **Task 3.8**：更新 `tasks.md`（勾選完成項）+ `works.md`（記錄各 milestone 決策與遇到的問題）
 
 ---
 

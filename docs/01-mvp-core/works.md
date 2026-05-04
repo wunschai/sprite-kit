@@ -105,6 +105,52 @@
 
 ---
 
+## Milestone 3: CLI 整合 + pipeline + utils + README
+
+### 派發決策
+
+**日期**：2026-05-04
+**模式**：序列（單一 ddd-developer worker，依賴 M1+M2 全部已合併）
+**模型**：Opus（與 M2 同）
+
+M3 內部 task 之間有強依賴（CLI 需要 utils 的 `next_available_path`、pipeline 需要 CLI dispatch 才能被測），所以不切平行線。Worker 自行依 TDD 順序：3.5 utils → 3.1/3.2 CLI → 3.3/3.4 pipeline → 3.6 README → 3.7 mark integration → 3.8 docs。
+
+### Worker 結果
+
+| 區塊 | 檔案 | 測試數 |
+|------|------|--------|
+| utils | `sprite_kit/utils.py` + `tests/test_utils.py` | 16 |
+| CLI dispatch | `sprite_kit/cli.py` + `tests/test_cli.py` | 17 |
+| Integration smoke | `tests/integration/test_pipeline.py`（mock-based 3 + real-API 4） | 3 default + 4 marked |
+| README | `README.md`（重寫）+ `README.zh-TW.md`（新增） | — |
+
+合計 M3 新增 **36 測試**：M1 15 + M2 95 + M3 36 = 146 全綠（4 個 `@pytest.mark.integration` 預設 deselected）。
+
+### 技術決策與細節
+
+- **Pipeline 寫在 `cli.py`**：不另開 `sprite_kit/pipeline.py`。MVP 流程簡單（generate → split → chroma+despill → align → qc → export），抽出獨立模組會增加一層導引但無實質好處；`run_pipeline(args, log)` 已從 `__init__.py` re-export，需要時可直接呼叫。
+- **ADR-3 包裝層在 cli.py**：`_safe_export_frames()` / `_export_formats()` 分別在每個寫檔點呼叫 `next_available_path()`，避免侵入凍結的 `export.py`。`--force` flag 統一在 dispatch 層攔截。
+- **Pytest marker 預設過濾**：在 `pyproject.toml` 的 `[tool.pytest.ini_options]` 加 `addopts = "-m 'not integration'"`，讓 `pytest tests/` 預設跳過真實 API 測試；本地要跑時用 `pytest -m integration`。這是新增 key、不改 M1/M2 既有條目，符合凍結邊界。
+- **`fake_api_key` 改 explicit fixture（非 autouse）**：原本 autouse 會把 `OPENAI_API_KEY` 強蓋成 `sk-test-fake`，連帶讓 `pytest -m integration` 也用到假 key；改成 explicit，讓 mocked 測試明確要求 fixture，real-API 測試保留使用者真實環境。
+- **Friendly errors**：`main()` catch `ConfigError` / `TemplateError` / `GenerateError` / `FileNotFoundError` / `ValueError` → 印 `Error: <msg>` 單行 + return 1，**不**印 traceback；通過 AC-7 友善錯誤要求。
+- **Logger idempotent**：`get_logger` 用 `logger._sprite_kit_configured` 旗標避免重複 attach handler，多次呼叫安全（測試 `test_does_not_duplicate_handlers_when_called_repeatedly` 守住）。
+- **Real-API smoke 結構就位但不執行**：`@pytest.mark.integration` parametrize 4 模板各 1 個 test；測試本身會在缺 `OPENAI_API_KEY` 時 `pytest.skip`，避免誤觸真實費用。Coordinator 不在 worker 流程中跑，等使用者手動觸發（spec 第 10 節說明）。
+
+### 遇到的問題
+
+1. **autouse fixture 影響 real-API 測試**：第一次 worker 把 `_api_key` 設成 autouse，導致 `pytest -m integration` 把使用者的真實 key 蓋成 `sk-test-fake`。改成 explicit `fake_api_key` fixture 後 mocked 與 real-API 測試完全隔離。
+2. **ruff `I001` import 排序**：`tests/test_utils.py` 與 cli.py 等三檔被 `ruff format` 格式化；用 `ruff check . --fix` + `ruff format .` 一次清掉。
+3. **沒踩到 M1/M2 凍結檔案**：唯一 `pyproject.toml` 改動只新增 `addopts` key（無修改既有條目），符合 worker 邊界規範。
+
+### Coordinator 驗收（在 worker worktree 內）
+
+- `pytest tests/ -v` → **146 passed, 4 deselected in 0.64s**
+- `ruff check .` → All checks passed
+- `ruff format --check .` → 18 files already formatted
+- `sprite-kit --help` / `generate|process|export|pipeline --help` → 全部正常列出 usage
+
+---
+
 ## 變更記錄
 
 | 日期 | 變更 |
@@ -112,3 +158,4 @@
 | 2026-05-04 | 初版；記錄 Task 1.1 的 ADR 決策 |
 | 2026-05-04 | 補上 Tasks 1.2–1.6 的開發紀錄與 Coordinator 驗收結果 |
 | 2026-05-04 | M2 完成：[A]/[B]/[C] 三條工作線平行開發；110 tests 全綠 |
+| 2026-05-04 | M3 完成：CLI + pipeline + utils + README + integration test 結構；146 tests 全綠（4 deselected） |
